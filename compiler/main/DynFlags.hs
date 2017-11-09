@@ -2337,6 +2337,7 @@ addDepSuffix s d = d { depSuffixes = s : depSuffixes d }
 
 addCmdlineFramework f d = d { cmdlineFrameworks = f : cmdlineFrameworks d}
 
+addGhcVersion :: FilePath -> DynFlags -> DynFlags
 addGhcVersion f d = d { ghcVersion = Just f }
 
 addHaddockOpts f d = d { haddockOptions = Just f}
