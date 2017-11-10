@@ -612,7 +612,7 @@ libraries/ghci_dist-install_CONFIGURE_OPTS += --flags=ghci
 # remains compatible with the old build system for the time being).
 # GHC.Prim module in the ghc-prim package with a flag:
 #
-libraries/ghc-prim_CONFIGURE_OPTS += --flag=include-ghc-prim
+# libraries/ghc-prim_CONFIGURE_OPTS += --flag=include-ghc-prim
 
 # And then we strip it out again before building the package:
 define libraries/ghc-prim_PACKAGE_MAGIC

@@ -19,10 +19,6 @@ source-repository head
     location: http://git.haskell.org/ghc.git
     subdir:   libraries/ghc-prim
 
-flag include-ghc-prim
-    Description: Include GHC.Prim in exposed-modules
-    default: False
-
 custom-setup
     setup-depends: base >= 4 && < 5, Cabal >= 1.23
 
@@ -53,6 +49,9 @@ Library
         GHC.Tuple
         GHC.Types
 
+    virtual-modules:
+        GHC.Prim
+
     -- OS Specific
     if os(windows)
         -- Windows requires some extra libraries for linking because the RTS
@@ -66,9 +65,6 @@ Library
         -- user32: provides access to apis to modify user components (UI etc)
         --         on Windows. Required because of mingw32.
         extra-libraries: user32, mingw32, mingwex
-
-    if flag(include-ghc-prim)
-        exposed-modules: GHC.Prim
 
     c-sources:
         cbits/atomic.c
