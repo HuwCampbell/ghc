@@ -103,6 +103,8 @@ import System.Console.Terminfo as Terminfo
 # endif
 #endif
 
+import GHC.BasePath
+
 -- | Short-circuit 'any' with a \"monadic predicate\".
 anyM :: (Monad m) => (a -> m Bool) -> [a] -> m Bool
 anyM _ [] = return False
@@ -597,7 +599,7 @@ getPkgDatabases verbosity mode use_user use_cache expand_vars my_flags = do
   let err_msg = "missing --global-package-db option, location of global package database unknown\n"
   global_conf <-
      case [ f | FlagGlobalConfig f <- my_flags ] of
-        [] -> do mb_dir <- getLibDir
+        [] -> do mb_dir <- getBaseDir ["ghc-pkg.exe"]
                  case mb_dir of
                    Nothing  -> die err_msg
                    Just dir -> do
@@ -2072,60 +2074,6 @@ reportError s = do hFlush stdout; hPutStrLn stderr s
 
 dieForcible :: String -> IO ()
 dieForcible s = die (s ++ " (use --force to override)")
-
------------------------------------------
--- Cut and pasted from ghc/compiler/main/SysTools
-
-#if defined(mingw32_HOST_OS)
-subst :: Char -> Char -> String -> String
-subst a b ls = map (\ x -> if x == a then b else x) ls
-
-unDosifyPath :: FilePath -> FilePath
-unDosifyPath xs = subst '\\' '/' xs
-
-getLibDir :: IO (Maybe String)
-getLibDir = do base   <- getExecDir "/ghc-pkg.exe"
-               case base of
-                 Nothing    -> return Nothing
-                 Just base' -> do
-                    libdir <- canonicalizePath $ base' </> "../lib"
-                    exists <- doesDirectoryExist libdir
-                    if exists
-                       then return $ Just libdir
-                       else return Nothing
-
--- (getExecDir cmd) returns the directory in which the current
---                  executable, which should be called 'cmd', is running
--- So if the full path is /a/b/c/d/e, and you pass "d/e" as cmd,
--- you'll get "/a/b/c" back as the result
-getExecDir :: String -> IO (Maybe String)
-getExecDir cmd =
-    getExecPath >>= maybe (return Nothing) removeCmdSuffix
-    where initN n = reverse . drop n . reverse
-          removeCmdSuffix = return . Just . initN (length cmd) . unDosifyPath
-
-getExecPath :: IO (Maybe String)
-getExecPath = try_size 2048 -- plenty, PATH_MAX is 512 under Win32.
-  where
-    try_size size = allocaArray (fromIntegral size) $ \buf -> do
-        ret <- c_GetModuleFileName nullPtr buf size
-        case ret of
-          0 -> return Nothing
-          _ | ret < size -> fmap Just $ peekCWString buf
-            | otherwise  -> try_size (size * 2)
-
-foreign import WINDOWS_CCONV unsafe "windows.h GetModuleFileNameW"
-  c_GetModuleFileName :: Ptr () -> CWString -> Word32 -> IO Word32
-#elfi defined(darwin_HOST_OS) || defined(linux_HOST_OS)
--- TODO: a) this is copy-pasta from SysTools.hs / getBaseDir. Why can't we reuse this here?
---          and parameterise getBaseDir over the executable (for windows)?
---       b) why is the windows getBaseDir logic, not part of getExecutablePath?
---          it would be much wider available then and we could drop all the custom logic?
-getBaseDir = Just . (\p -> p </> "lib") . takeDirectory . takeDirectory <$> getExecutablePath
-#else
-getLibDir :: IO (Maybe String)
-getLibDir = return Nothing
-#endif
 
 -----------------------------------------
 -- Adapted from ghc/compiler/utils/Panic
