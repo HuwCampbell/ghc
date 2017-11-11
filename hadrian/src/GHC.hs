@@ -1,0 +1,177 @@
+{-# OPTIONS_GHC -fno-warn-missing-signatures #-}
+module GHC (
+    -- * GHC packages
+    array, base, binary, bytestring, cabal, compareSizes, compiler, containers,
+    deepseq, deriveConstants, directory, filepath, genapply, genprimopcode, ghc,
+    ghcBoot, ghcBootTh, ghcCabal, ghcCompact, ghci, ghcPkg, ghcPrim, ghcTags,
+    ghcSplit, haddock, haskeline, hsc2hs, hp2ps, hpc, hpcBin, integerGmp,
+    integerSimple, iservBin, libffi, mtl, parsec, parallel, pretty, primitive,
+    process, rts, runGhc, stm, templateHaskell, terminfo, text, time, touchy,
+    transformers, unlit, unix, win32, xhtml, dataBitcode, dataBitcodeLlvm,
+    dataBitcodeEdsl,
+    ghcPackages, isGhcPackage, defaultPackages,
+
+    -- * Package information
+    programName, nonCabalContext, nonHsMainPackage, autogenPath, installStage,
+
+    -- * Miscellaneous
+    programPath, ghcSplitPath, stripCmdPath, buildDll0
+    ) where
+
+import Base
+import CommandLine
+import Context
+import Oracles.Flag
+import Oracles.Setting
+
+import GHC.Packages
+
+-- | Packages that are built by default. You can change this in "UserSettings".
+defaultPackages :: Stage -> Action [Package]
+defaultPackages Stage0 = stage0Packages
+defaultPackages Stage1 = stage1Packages
+defaultPackages Stage2 = stage2Packages
+defaultPackages Stage3 = return []
+
+stage0Packages :: Action [Package]
+stage0Packages = do
+    win <- windowsHost
+    ios <- iosHost
+    cross <- crossCompiling
+    return $ [ binary
+             , cabal
+             , compareSizes
+             , compiler
+             , dataBitcode
+             , dataBitcodeLlvm
+             , dataBitcodeEdsl
+             , deriveConstants
+             , genapply
+             , genprimopcode
+             , ghc
+             , ghcBoot
+             , ghcBootTh
+             , ghci
+             , ghcPkg
+             , ghcTags
+             , hsc2hs
+             , hp2ps
+             , hpc
+             , mtl
+             , parsec
+             , templateHaskell
+             , text
+             , transformers
+             , unlit                       ]
+          ++ [ terminfo | not win, not ios, not cross ]
+          ++ [ touchy   | win              ]
+
+stage1Packages :: Action [Package]
+stage1Packages = do
+    win        <- windowsHost
+    intSimple  <- cmdIntegerSimple
+    libraries0 <- filter isLibrary <$> stage0Packages
+    return $ libraries0 -- Build all Stage0 libraries in Stage1
+          ++ [ array
+             , base
+             , bytestring
+             , containers
+             , deepseq
+             , directory
+             , filepath
+             , ghc
+             , ghcCompact
+             , ghcPrim
+             , haskeline
+             , hpcBin
+             , hsc2hs
+             , if intSimple then integerSimple else integerGmp
+             , pretty
+             , process
+             , rts
+             , runGhc
+             , stm
+             , time
+             , xhtml              ]
+          ++ [ iservBin | not win ]
+          ++ [ unix     | not win ]
+          ++ [ win32    | win     ]
+
+stage2Packages :: Action [Package]
+stage2Packages = return [haddock]
+
+-- | Given a 'Context', compute the name of the program that is built in it
+-- assuming that the corresponding package's type is 'Program'. For example, GHC
+-- built in 'Stage0' is called @ghc-stage1@. If the given package is a
+-- 'Library', the function simply returns its name.
+programName :: Context -> String
+programName Context {..}
+    | package == ghc      = "ghc"
+    | package == hpcBin   = "hpc"
+    | package == runGhc   = "runhaskell"
+    | package == iservBin = "ghc-iserv"
+    | otherwise           = pkgName package
+
+-- | The build stage whose results are used when installing a package, or
+-- @Nothing@ if the package is not installed, e.g. because it is a user package.
+-- The current implementation installs the /latest/ build stage of a package.
+installStage :: Package -> Action (Maybe Stage)
+installStage pkg
+    | not (isGhcPackage pkg) = return Nothing -- Only GHC packages are installed
+    | otherwise = do
+        stages <- filterM (fmap (pkg `elem`) . defaultPackages) [Stage0 ..]
+        return $ if null stages then Nothing else Just (maximum stages)
+
+-- | The 'FilePath' to a program executable in a given 'Context'.
+programPath :: Context -> Action FilePath
+programPath context@Context {..} = do
+    path    <- stageBinPath stage
+    return $ path -/- programName context <.> exe
+
+-- | Some contexts are special: their packages do not have @.cabal@ metadata or
+-- we cannot run @ghc-cabal@ on them, e.g. because the latter hasn't been built
+-- yet (this is the case with the 'ghcCabal' package in 'Stage0').
+nonCabalContext :: Context -> Bool
+nonCabalContext Context {..} = (package `elem` [ hp2ps
+                                               , touchy
+                                               , unlit
+                                               ])
+    || package == ghcCabal && stage == Stage0
+
+-- | Some program packages should not be linked with Haskell main function.
+nonHsMainPackage :: Package -> Bool
+nonHsMainPackage = (`elem` [ghc, hp2ps, iservBin, touchy, unlit])
+
+-- | Path to the autogen directory generated by @ghc-cabal@ of a given 'Context'.
+autogenPath :: Context -> Action FilePath
+autogenPath context@Context {..}
+    | isLibrary package   = autogen "build"
+    | package == ghc      = autogen "build/ghc"
+    | package == hpcBin   = autogen "build/hpc"
+    | package == iservBin = autogen "build/iserv"
+    | otherwise           = autogen $ "build" -/- pkgName package
+  where
+    autogen dir = contextPath context <&> (-/- dir -/- "autogen")
+
+-- | @ghc-split@ is a Perl script used by GHC with @-split-objs@ flag. It is
+-- generated in "Rules.Generators.GhcSplit".
+ghcSplitPath :: FilePath
+ghcSplitPath = inplaceLibBinPath -/- "ghc-split"
+
+-- ref: mk/config.mk
+-- | Command line tool for stripping.
+stripCmdPath :: Action FilePath
+stripCmdPath = do
+    targetPlatform <- setting TargetPlatform
+    top <- topDirectory
+    case targetPlatform of
+        "x86_64-unknown-mingw32" ->
+             return (top -/- "inplace/mingw/bin/strip.exe")
+        "arm-unknown-linux" ->
+             return ":" -- HACK: from the make-based system, see the ref above
+        _ -> return "strip"
+
+buildDll0 :: Context -> Action Bool
+buildDll0 Context {..} = do
+    windows <- windowsHost
+    return $ windows && stage == Stage1 && package == compiler
