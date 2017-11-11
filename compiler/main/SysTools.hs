@@ -48,7 +48,6 @@ import Platform
 import Util
 import DynFlags
 
-import System.Environment (getExecutablePath)
 import System.FilePath
 import System.IO
 import System.Directory
