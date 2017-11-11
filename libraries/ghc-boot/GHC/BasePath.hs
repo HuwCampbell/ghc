@@ -1,6 +1,9 @@
 {-# LANGUAGE CPP #-}
 module GHC.BasePath (getBaseDir) where
 
+import System.Environment (getExecutablePath)
+import System.FilePath
+
 #if defined(mingw32_HOST_OS)
 #if MIN_VERSION_Win32(2,5,0)
 import qualified System.Win32.Types as Win32
@@ -27,6 +30,8 @@ import System.Win32.DLL (loadLibrary, getProcAddress)
 # endif
 #endif
 
+-- | getBaseDir tries to find the base path (@$topdir@), assuming the executable is in @$topdir/bin/@
+-- and the base path is @$topdir/lib@.
 getBaseDir :: [String] -> IO (Maybe String)
 #if defined(mingw32_HOST_OS)
 -- Assuming we are running ghc, accessed by path  $(stuff)/<foo>/ghc.exe,
