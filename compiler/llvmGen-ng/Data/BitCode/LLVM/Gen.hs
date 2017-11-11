@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fprof-auto #-}
+{-# OPTIONS_GHC -fprof-auto -Wno-type-defaults -Wno-unused-matches -Wno-unused-local-binds -Wno-overlapping-patterns -Wno-incomplete-patterns -Wno-unused-do-bind -Wno-missing-signatures #-}
 {-# LANGUAGE CPP, GADTs, GeneralizedNewtypeDeriving, RecursiveDo, LambdaCase, FlexibleInstances, FlexibleContexts, StandaloneDeriving, BangPatterns, TupleSections #-}
 module Data.BitCode.LLVM.Gen where
 

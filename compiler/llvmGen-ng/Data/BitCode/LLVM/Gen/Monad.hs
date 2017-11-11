@@ -5,16 +5,13 @@ import GhcPrelude
 
 import DynFlags
 import qualified Stream
-import Control.Monad (ap)
 
 import Outputable as Outp
 
-import EDSL.Monad
 import ErrUtils
 
 import Control.Monad.IO.Class
 import Control.Monad.Trans.State
-import Data.Functor.Identity
 import Control.Monad.Trans.Class
 import Control.Monad.Fix (MonadFix(..))
 
