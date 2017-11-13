@@ -1730,6 +1730,7 @@ packageHsLibs dflags p = map (mkDynName . addSuffix) (hsLibraries p)
             = panic ("Don't understand library name " ++ x)
 
         addSuffix rts@"HSrts"    = rts       ++ (expandTag rts_tag)
+        addSuffix rts@"HSrts-1.0"= rts       ++ (expandTag rts_tag)
         addSuffix other_lib      = other_lib ++ (expandTag tag)
 
         expandTag t | null t = ""
